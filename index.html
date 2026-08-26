@@ -177,7 +177,7 @@
 <section>
   <div class="section-label">Trends</div>
   <div class="section-title">Suburb Trend Explorer</div>
-  <p class="section-sub">3-year SQM time series — left axis (bars), right axis (line).</p>
+  <p class="section-sub">Select a suburb to explore SQM and OnTheHouse time series.</p>
 
   <div class="controls">
     <label>Suburb</label>
@@ -185,37 +185,56 @@
       <input class="search-input" id="trendInput" placeholder="Type to search suburb…" style="width:280px" autocomplete="off">
       <div class="dropdown" id="trendDrop"></div>
     </div>
-    <label>Bars (left)</label>
-    <select id="metricL" onchange="renderTrend()">
-      <option value="asking_price_house">Asking Price — House</option>
-      <option value="asking_price_unit">Asking Price — Unit</option>
-      <option value="median_sale_price_house">Median Sale Price — House</option>
-      <option value="median_sale_price_unit">Median Sale Price — Unit</option>
-      <option value="median_value_house">Median Value — House</option>
-      <option value="median_value_unit">Median Value — Unit</option>
-      <option value="weekly_rent_house">Weekly Rent — House</option>
-      <option value="weekly_rent_unit">Weekly Rent — Unit</option>
-      <option value="vacancy_rate">Vacancy Rate</option>
-      <option value="gross_yield_house">Gross Yield — House</option>
-      <option value="gross_yield_unit">Gross Yield — Unit</option>
-    </select>
-    <label>Line (right)</label>
-    <select id="metricR" onchange="renderTrend()">
-      <option value="weekly_rent_house" selected>Weekly Rent — House</option>
-      <option value="weekly_rent_unit">Weekly Rent — Unit</option>
-      <option value="asking_price_house">Asking Price — House</option>
-      <option value="asking_price_unit">Asking Price — Unit</option>
-      <option value="median_sale_price_house">Median Sale Price — House</option>
-      <option value="median_sale_price_unit">Median Sale Price — Unit</option>
-      <option value="median_value_house">Median Value — House</option>
-      <option value="median_value_unit">Median Value — Unit</option>
-      <option value="vacancy_rate">Vacancy Rate</option>
-      <option value="gross_yield_house">Gross Yield — House</option>
-      <option value="gross_yield_unit">Gross Yield — Unit</option>
-    </select>
   </div>
   <div class="status" id="trendStatus"></div>
-  <div class="chart-wrap"><canvas id="chartTrend"></canvas></div>
+
+  <div class="chart-wrap" style="margin-bottom:24px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px">SQM Research <span style="font-weight:400;color:var(--text2);font-size:12px">— 3-year monthly</span></div>
+    <div class="controls" style="margin-bottom:12px">
+      <label>Bars (left)</label>
+      <select id="metricL" onchange="renderTrend()">
+        <option value="asking_price_house">Asking Price — House</option>
+        <option value="asking_price_unit">Asking Price — Unit</option>
+        <option value="weekly_rent_house">Weekly Rent — House</option>
+        <option value="weekly_rent_unit">Weekly Rent — Unit</option>
+        <option value="vacancy_rate">Vacancy Rate</option>
+        <option value="gross_yield_house">Gross Yield — House</option>
+        <option value="gross_yield_unit">Gross Yield — Unit</option>
+      </select>
+      <label>Line (right)</label>
+      <select id="metricR" onchange="renderTrend()">
+        <option value="weekly_rent_house" selected>Weekly Rent — House</option>
+        <option value="weekly_rent_unit">Weekly Rent — Unit</option>
+        <option value="asking_price_house">Asking Price — House</option>
+        <option value="asking_price_unit">Asking Price — Unit</option>
+        <option value="vacancy_rate">Vacancy Rate</option>
+        <option value="gross_yield_house">Gross Yield — House</option>
+        <option value="gross_yield_unit">Gross Yield — Unit</option>
+      </select>
+    </div>
+    <canvas id="chartTrend"></canvas>
+  </div>
+
+  <div class="chart-wrap">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px">OnTheHouse <span style="font-weight:400;color:var(--text2);font-size:12px">— annual</span></div>
+    <div class="controls" style="margin-bottom:12px">
+      <label>Bars (left)</label>
+      <select id="othMetricL" onchange="renderOthTrend()">
+        <option value="median_sale_price_house">Median Sale Price — House</option>
+        <option value="median_sale_price_unit">Median Sale Price — Unit</option>
+        <option value="median_value_house">Median Value — House</option>
+        <option value="median_value_unit">Median Value — Unit</option>
+      </select>
+      <label>Line (right)</label>
+      <select id="othMetricR" onchange="renderOthTrend()">
+        <option value="median_sale_price_unit" selected>Median Sale Price — Unit</option>
+        <option value="median_sale_price_house">Median Sale Price — House</option>
+        <option value="median_value_house">Median Value — House</option>
+        <option value="median_value_unit">Median Value — Unit</option>
+      </select>
+    </div>
+    <canvas id="chartOth"></canvas>
+  </div>
 </section>
 
 <section id="compsSection" style="display:none">
@@ -596,6 +615,7 @@ function pickSuburb(key, label) {
   trendInput.value = label;
   trendDrop.style.display = 'none';
   renderTrend();
+  renderOthTrend();
   loadComps(key);
   loadAuctions(key);
 }
@@ -697,6 +717,91 @@ async function renderTrend() {
   }
 }
 window.renderTrend = renderTrend;
+
+// --- OTH trend chart ---
+let othChart = null;
+
+async function renderOthTrend() {
+  if (!trendSelected) return;
+  const [suburb, state, postcode] = trendSelected.split('|');
+  const metricL = $('othMetricL').value;
+  const metricR = $('othMetricR').value;
+
+  try {
+    const [ptsL, ptsR] = await Promise.all([
+      window.queryTrend(suburb, state, postcode, metricL),
+      window.queryTrend(suburb, state, postcode, metricR),
+    ]);
+
+    if (othChart) othChart.destroy();
+
+    const mL = metricMeta(metricL);
+    const mR = metricMeta(metricR);
+    const allDates = [...new Set([...ptsL.map(p => p.date), ...ptsR.map(p => p.date)])].sort();
+
+    othChart = new Chart($('chartOth').getContext('2d'), {
+      data: {
+        labels: allDates,
+        datasets: [
+          {
+            type: 'bar',
+            label: mL.label,
+            data: allDates.map(d => { const p = ptsL.find(x => x.date === d); return p ? p.value : null; }),
+            backgroundColor: 'rgba(10,132,255,0.35)',
+            borderColor: '#0a84ff',
+            borderWidth: 1,
+            borderRadius: 2,
+            yAxisID: 'yL',
+            order: 2,
+          },
+          {
+            type: 'line',
+            label: mR.label,
+            data: allDates.map(d => { const p = ptsR.find(x => x.date === d); return p ? p.value : null; }),
+            borderColor: '#30d158',
+            backgroundColor: 'rgba(48,209,88,0.08)',
+            fill: false,
+            tension: 0.3,
+            pointRadius: 3,
+            borderWidth: 2,
+            yAxisID: 'yR',
+            order: 1,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { labels: { color: '#86868b', usePointStyle: true, boxWidth: 16 } },
+          tooltip: { callbacks: {
+            label: ctx => {
+              const m = ctx.datasetIndex === 0 ? mL : mR;
+              const v = m.decimals ? ctx.parsed.y.toFixed(2) : Math.round(ctx.parsed.y).toLocaleString();
+              return ctx.dataset.label + ': ' + m.prefix + v + m.suffix;
+            }
+          }}
+        },
+        scales: {
+          x: { ticks: { color: '#86868b' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          yL: {
+            position: 'left',
+            ticks: { color: '#0a84ff', callback: v => mL.prefix + Math.round(v).toLocaleString() + mL.suffix },
+            grid: { color: 'rgba(255,255,255,0.05)' },
+          },
+          yR: {
+            position: 'right',
+            ticks: { color: '#30d158', callback: v => mR.prefix + Math.round(v).toLocaleString() + mR.suffix },
+            grid: { drawOnChartArea: false },
+          }
+        }
+      }
+    });
+  } catch (e) {
+    // OTH data may not exist for all suburbs
+  }
+}
+window.renderOthTrend = renderOthTrend;
 
 // --- Comps ---
 let COMPS = [], compSortCol = 'sale_date', compSortDir = -1, compPage = 1;
