@@ -142,6 +142,8 @@
         <th onclick="sort('state')">St</th>
         <th onclick="sort('updated')">Updated</th>
         <th onclick="sort('vacancy')">Vacancy</th>
+        <th onclick="sort('med_h')">Med House</th>
+        <th onclick="sort('med_u')">Med Unit</th>
         <th onclick="sort('ask_h')">Ask House</th>
         <th onclick="sort('ask_u')">Ask Unit</th>
         <th onclick="sort('rent_h')">Rent H</th>
@@ -187,6 +189,10 @@
     <select id="metricL" onchange="renderTrend()">
       <option value="asking_price_house">Asking Price — House</option>
       <option value="asking_price_unit">Asking Price — Unit</option>
+      <option value="median_sale_price_house">Median Sale Price — House</option>
+      <option value="median_sale_price_unit">Median Sale Price — Unit</option>
+      <option value="median_value_house">Median Value — House</option>
+      <option value="median_value_unit">Median Value — Unit</option>
       <option value="weekly_rent_house">Weekly Rent — House</option>
       <option value="weekly_rent_unit">Weekly Rent — Unit</option>
       <option value="vacancy_rate">Vacancy Rate</option>
@@ -199,6 +205,10 @@
       <option value="weekly_rent_unit">Weekly Rent — Unit</option>
       <option value="asking_price_house">Asking Price — House</option>
       <option value="asking_price_unit">Asking Price — Unit</option>
+      <option value="median_sale_price_house">Median Sale Price — House</option>
+      <option value="median_sale_price_unit">Median Sale Price — Unit</option>
+      <option value="median_value_house">Median Value — House</option>
+      <option value="median_value_unit">Median Value — Unit</option>
       <option value="vacancy_rate">Vacancy Rate</option>
       <option value="gross_yield_house">Gross Yield — House</option>
       <option value="gross_yield_unit">Gross Yield — Unit</option>
@@ -362,6 +372,8 @@ function render() {
     '<td>' + r.state + '</td>' +
     '<td style="color:var(--text2);font-size:12px">' + (r.updated || D) + '</td>' +
     '<td class="' + vC(r.vacancy) + '">' + sP(r.vacancy) + '</td>' +
+    '<td>' + s$(r.med_h) + '</td>' +
+    '<td>' + s$(r.med_u) + '</td>' +
     '<td>' + s$(r.ask_h) + '</td>' +
     '<td>' + s$(r.ask_u) + '</td>' +
     '<td>' + sR(r.rent_h) + '</td>' +
@@ -591,11 +603,14 @@ window.pickSuburb = pickSuburb;
 
 function metricMeta(metric) {
   const isYield = metric.startsWith('gross_yield');
-  const isPrice = metric.startsWith('asking_price');
-  const isRent = metric.startsWith('weekly_rent');
+  const isPrice = metric.startsWith('asking_price') || metric.startsWith('median_sale_price') || metric.startsWith('median_value');
+  const isRent = metric.startsWith('weekly_rent') || metric.startsWith('median_asking_rent');
+  const isGrowth = metric.includes('growth');
+  const needsDecimals = isYield || metric === 'vacancy_rate' || isGrowth;
   return {
     prefix: isPrice || isRent ? '$' : '',
-    suffix: isYield || metric === 'vacancy_rate' ? '%' : isRent ? '/wk' : '',
+    suffix: isYield || metric === 'vacancy_rate' || isGrowth ? '%' : isRent ? '/wk' : '',
+    decimals: needsDecimals,
     label: metric.replace(/_/g, ' ')
   };
 }
@@ -656,7 +671,8 @@ async function renderTrend() {
           tooltip: { callbacks: {
             label: ctx => {
               const m = ctx.datasetIndex === 0 ? mL : mR;
-              return ctx.dataset.label + ': ' + m.prefix + Math.round(ctx.parsed.y).toLocaleString() + m.suffix;
+              const v = m.decimals ? ctx.parsed.y.toFixed(2) : Math.round(ctx.parsed.y).toLocaleString();
+              return ctx.dataset.label + ': ' + m.prefix + v + m.suffix;
             }
           }}
         },
@@ -664,12 +680,12 @@ async function renderTrend() {
           x: { ticks: { color: '#86868b', maxTicksLimit: 10 }, grid: { color: 'rgba(255,255,255,0.05)' } },
           yL: {
             position: 'left',
-            ticks: { color: '#0a84ff', callback: v => mL.prefix + Math.round(v).toLocaleString() + mL.suffix },
+            ticks: { color: '#0a84ff', callback: v => mL.prefix + (mL.decimals ? v.toFixed(2) : Math.round(v).toLocaleString()) + mL.suffix },
             grid: { color: 'rgba(255,255,255,0.05)' },
           },
           yR: {
             position: 'right',
-            ticks: { color: '#30d158', callback: v => mR.prefix + Math.round(v).toLocaleString() + mR.suffix },
+            ticks: { color: '#30d158', callback: v => mR.prefix + (mR.decimals ? v.toFixed(2) : Math.round(v).toLocaleString()) + mR.suffix },
             grid: { drawOnChartArea: false },
           }
         }
