@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Suburb Screener</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0a; --bg2: #161618; --bg3: #1c1c1e;
+    --text: #f5f5f7; --text2: #86868b;
+    --accent: #0a84ff; --accent2: #30d158;
+    --warn: #ff9f0a; --danger: #ff453a;
+    --border: rgba(255,255,255,0.1);
+    --card: #1c1c1e; --radius: 18px;
+    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+
+  body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(10,10,10,0.85); backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid var(--border); padding: 0 48px;
+    display: flex; align-items: center; gap: 32px; height: 52px;
+  }
+  nav .brand { font-size: 17px; font-weight: 600; }
+  nav .nav-sub { font-size: 13px; color: var(--text2); }
+
+  .hero {
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0d1b2a 100%);
+    padding: 64px 48px 48px;
+  }
+  .hero .eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; }
+  .hero h1 { font-size: clamp(28px, 4vw, 48px); font-weight: 700; letter-spacing: -.03em; margin-bottom: 8px; }
+  .hero .sub { font-size: 15px; color: var(--text2); margin-bottom: 32px; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+  .kpi-card { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 20px 18px; backdrop-filter: blur(10px); }
+  .kpi-card .k-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 6px; }
+  .kpi-card .k-val { font-size: 26px; font-weight: 700; letter-spacing: -.02em; color: #fff; }
+  .kpi-card .k-sub { font-size: 12px; color: var(--text2); margin-top: 4px; }
+
+  section { padding: 56px 48px; max-width: 1400px; margin: 0 auto; }
+  .section-label { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+  .section-title { font-size: clamp(22px, 3vw, 36px); font-weight: 700; letter-spacing: -.02em; margin-bottom: 6px; }
+  .section-sub { font-size: 15px; color: var(--text2); margin-bottom: 32px; }
+
+  .controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 24px; }
+  .controls label { font-size: 13px; color: var(--text2); }
+  select, input[type=range] {
+    background: var(--bg3); color: var(--text); border: 1px solid var(--border);
+    border-radius: 10px; padding: 7px 12px; font-size: 13px; outline: none; cursor: pointer;
+  }
+  select:focus, .search-input:focus { border-color: var(--accent); }
+  .search-input {
+    background: var(--bg2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 10px; padding: 7px 14px; font-size: 13px; outline: none; width: 220px;
+  }
+
+  .tbl-wrap { background: var(--card); border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 10px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text2); border-bottom: 1px solid var(--border); cursor: pointer; white-space: nowrap; user-select: none; }
+  th:hover { color: var(--text); }
+  td { padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.04); white-space: nowrap; }
+  tr:hover td { background: rgba(255,255,255,0.03); }
+  td.up { color: var(--accent2); }
+  td.down { color: var(--danger); }
+  td.flat { color: var(--text2); }
+  td.clickable { cursor: pointer; color: var(--accent); font-weight: 600; }
+  td.clickable:hover { text-decoration: underline; }
+
+  .tbl-count { font-size: 13px; color: var(--text2); }
+  .tbl-pagination { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 14px; border-top: 1px solid var(--border); }
+  .pg-btn { background: var(--bg2); color: var(--text2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 14px; font-size: 12px; cursor: pointer; }
+  .pg-btn:hover:not(:disabled) { background: var(--bg3); color: var(--text); }
+  .pg-btn:disabled { opacity: .3; cursor: default; }
+  .pg-info { font-size: 12px; color: var(--text2); }
+
+  .chart-wrap { background: var(--card); border-radius: var(--radius); padding: 28px; box-shadow: var(--shadow); border: 1px solid var(--border); margin-bottom: 24px; }
+
+  .dropdown { display: none; position: absolute; top: 100%; left: 0; width: 280px; max-height: 200px; overflow-y: auto; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; z-index: 50; margin-top: 2px; }
+  .dropdown-item { padding: 6px 12px; font-size: 13px; color: var(--text); cursor: pointer; }
+  .dropdown-item:hover, .dropdown-item.hl { background: var(--bg2); }
+
+  .loading { text-align: center; padding: 48px; color: var(--text2); font-size: 15px; }
+  .status { font-size: 13px; color: var(--text2); padding: 8px 0; }
+
+  .result-tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .result-tag.sold { background: rgba(48,209,88,0.15); color: var(--accent2); }
+  .result-tag.other { background: rgba(255,159,10,0.15); color: var(--warn); }
+  .result-tag.withdrawn { background: rgba(134,134,139,0.15); color: var(--text2); }
+
+  @media (max-width: 860px) {
+    section { padding: 40px 20px; }
+    nav { padding: 0 20px; }
+    .hero { padding: 48px 20px 36px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="brand">Suburb Screener</div>
+  <div class="nav-sub">SQM Research + ABS Census</div>
+</nav>
+
+<div class="hero">
+  <div class="eyebrow">Property Intelligence</div>
+  <h1>Suburb Screener</h1>
+  <p class="sub">Filter, sort, and explore suburb-level property data across Australia.</p>
+  <div class="kpi-row" id="kpiRow"></div>
+</div>
+
+<section>
+  <div class="section-label">Screener</div>
+  <div class="section-title">All Suburbs</div>
+  <p class="section-sub" id="dataSub">Loading data…</p>
+
+  <div class="controls">
+    <label>State</label>
+    <select id="fState" onchange="page=1;render()"><option value="">All</option></select>
+    <label>Min Yield</label>
+    <select id="fYield" onchange="page=1;render()">
+      <option value="">Any</option><option value="3">3%+</option><option value="4">4%+</option><option value="5">5%+</option>
+    </select>
+    <label>Max Vacancy</label>
+    <select id="fVac" onchange="page=1;render()">
+      <option value="">Any</option><option value="1">≤1%</option><option value="2">≤2%</option><option value="3">≤3%</option>
+    </select>
+    <input class="search-input" id="fSearch" placeholder="Search suburb…" oninput="page=1;render()">
+    <span class="tbl-count" id="count"></span>
+  </div>
+
+  <div class="tbl-wrap">
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th onclick="sort('suburb')">Suburb</th>
+        <th onclick="sort('state')">St</th>
+        <th onclick="sort('updated')">Updated</th>
+        <th onclick="sort('vacancy')">Vacancy</th>
+        <th onclick="sort('ask_h')">Ask House</th>
+        <th onclick="sort('ask_u')">Ask Unit</th>
+        <th onclick="sort('rent_h')">Rent H</th>
+        <th onclick="sort('rent_u')">Rent U</th>
+        <th onclick="sort('yield_h')">Yield H</th>
+        <th onclick="sort('yield_u')">Yield U</th>
+        <th onclick="sort('ph3m')">House 3m</th>
+        <th onclick="sort('pu3m')">Unit 3m</th>
+        <th onclick="sort('ph1y')">House 1yr</th>
+        <th onclick="sort('ph3y')">House 3yr</th>
+        <th onclick="sort('pu1y')">Unit 1yr</th>
+        <th onclick="sort('pu3y')">Unit 3yr</th>
+        <th onclick="sort('rh1y')">Rent H 1yr</th>
+        <th onclick="sort('ru1y')">Rent U 1yr</th>
+        <th onclick="sort('renter_pct')">Renter%</th>
+        <th onclick="sort('auc_n')">Auctions</th>
+        <th onclick="sort('auc_med')">Auc Med</th>
+        <th onclick="sort('auc_cr')">Auc CR</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    </div>
+    <div class="tbl-pagination">
+      <button class="pg-btn" id="btnPrev" onclick="page--;render()">← Prev</button>
+      <span class="pg-info" id="pgInfo"></span>
+      <button class="pg-btn" id="btnNext" onclick="page++;render()">Next →</button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="section-label">Trends</div>
+  <div class="section-title">Suburb Trend Explorer</div>
+  <p class="section-sub">3-year SQM time series — left axis (bars), right axis (line).</p>
+
+  <div class="controls">
+    <label>Suburb</label>
+    <div style="position:relative;display:inline-block">
+      <input class="search-input" id="trendInput" placeholder="Type to search suburb…" style="width:280px" autocomplete="off">
+      <div class="dropdown" id="trendDrop"></div>
+    </div>
+    <label>Bars (left)</label>
+    <select id="metricL" onchange="renderTrend()">
+      <option value="asking_price_house">Asking Price — House</option>
+      <option value="asking_price_unit">Asking Price — Unit</option>
+      <option value="weekly_rent_house">Weekly Rent — House</option>
+      <option value="weekly_rent_unit">Weekly Rent — Unit</option>
+      <option value="vacancy_rate">Vacancy Rate</option>
+      <option value="gross_yield_house">Gross Yield — House</option>
+      <option value="gross_yield_unit">Gross Yield — Unit</option>
+    </select>
+    <label>Line (right)</label>
+    <select id="metricR" onchange="renderTrend()">
+      <option value="weekly_rent_house" selected>Weekly Rent — House</option>
+      <option value="weekly_rent_unit">Weekly Rent — Unit</option>
+      <option value="asking_price_house">Asking Price — House</option>
+      <option value="asking_price_unit">Asking Price — Unit</option>
+      <option value="vacancy_rate">Vacancy Rate</option>
+      <option value="gross_yield_house">Gross Yield — House</option>
+      <option value="gross_yield_unit">Gross Yield — Unit</option>
+    </select>
+  </div>
+  <div class="status" id="trendStatus"></div>
+  <div class="chart-wrap"><canvas id="chartTrend"></canvas></div>
+</section>
+
+<section id="compsSection" style="display:none">
+  <div class="section-label">Comparable Sales</div>
+  <div class="section-title" id="compsTitle">—</div>
+  <p class="section-sub" id="compsSub"></p>
+
+  <div class="controls" id="compsControls">
+    <label>Type</label>
+    <select id="compType" onchange="renderComps()">
+      <option value="">All</option><option value="House">House</option><option value="Unit">Unit</option><option value="Townhouse">Townhouse</option>
+    </select>
+    <label>Beds</label>
+    <select id="compBeds" onchange="renderComps()">
+      <option value="">Any</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4+</option>
+    </select>
+    <span class="tbl-count" id="compsCount"></span>
+  </div>
+
+  <div class="chart-wrap" style="margin-bottom:24px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:4px">Sale Prices Over Time</div>
+    <canvas id="chartComps" height="100"></canvas>
+  </div>
+
+  <div class="tbl-wrap">
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th onclick="compSort('address')">Address</th>
+        <th onclick="compSort('sale_price')">Price</th>
+        <th onclick="compSort('sale_date')">Date</th>
+        <th onclick="compSort('property_type')">Type</th>
+        <th onclick="compSort('bedrooms')">Beds</th>
+        <th onclick="compSort('bathrooms')">Bath</th>
+        <th onclick="compSort('parking')">Park</th>
+        <th onclick="compSort('land_size')">Land m²</th>
+        <th onclick="compSort('year_built')">Built</th>
+      </tr></thead>
+      <tbody id="compsTbody"></tbody>
+    </table>
+    </div>
+    <div class="tbl-pagination">
+      <button class="pg-btn" id="compPrev" onclick="compPage--;renderComps()">← Prev</button>
+      <span class="pg-info" id="compPgInfo"></span>
+      <button class="pg-btn" id="compNext" onclick="compPage++;renderComps()">Next →</button>
+    </div>
+  </div>
+</section>
+
+<section id="aucSection" style="display:none">
+  <div class="section-label">Auction Results</div>
+  <div class="section-title" id="aucTitle">—</div>
+  <p class="section-sub" id="aucSubDetail"></p>
+
+  <div class="controls">
+    <label>Type</label>
+    <select id="aucType" onchange="aucPage=1;renderAuctions()">
+      <option value="">All</option><option value="House">House</option><option value="Unit">Unit</option><option value="Townhouse">Townhouse</option>
+    </select>
+    <label>Beds</label>
+    <select id="aucBeds" onchange="aucPage=1;renderAuctions()">
+      <option value="">Any</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4+</option>
+    </select>
+    <span class="tbl-count" id="aucCount"></span>
+  </div>
+
+  <div class="tbl-wrap">
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th onclick="aucSort('address')">Address</th>
+        <th onclick="aucSort('price')">Price</th>
+        <th onclick="aucSort('auction_date')">Date</th>
+        <th onclick="aucSort('result')">Result</th>
+        <th onclick="aucSort('property_type')">Type</th>
+        <th onclick="aucSort('bedrooms')">Beds</th>
+        <th onclick="aucSort('bathrooms')">Bath</th>
+      </tr></thead>
+      <tbody id="aucTbody"></tbody>
+    </table>
+    </div>
+    <div class="tbl-pagination">
+      <button class="pg-btn" id="aucPrev" onclick="aucPage--;renderAuctions()">← Prev</button>
+      <span class="pg-info" id="aucPgInfo"></span>
+      <button class="pg-btn" id="aucNext" onclick="aucPage++;renderAuctions()">Next →</button>
+    </div>
+  </div>
+</section>
+
+<script>
+// --- Screener table ---
+let DATA = [], sortCol = 'yield_u', sortDir = -1, page = 1;
+const PAGE_SIZE = 25;
+const D = '—';
+const $  = id => document.getElementById(id);
+
+function s$(v) { return v == null ? D : '$' + Math.round(v).toLocaleString(); }
+function sP(v) { return v == null ? D : v.toFixed(1) + '%'; }
+function sY(v) { return v == null ? D : v.toFixed(2) + '%'; }
+function sR(v) { return v == null ? D : '$' + Math.round(v) + '/wk'; }
+function gC(v) { return v > 0 ? 'up' : v < 0 ? 'down' : 'flat'; }
+function vC(v) { return v != null ? (v <= 1 ? 'up' : v > 3 ? 'down' : 'flat') : ''; }
+function yC(v) { return v != null ? (v >= 5 ? 'up' : v >= 3.5 ? '' : 'down') : ''; }
+
+function median(arr) {
+  const s = arr.filter(v => v != null).sort((a, b) => a - b);
+  if (!s.length) return null;
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+function sort(col) {
+  if (sortCol === col) sortDir *= -1;
+  else { sortCol = col; sortDir = col === 'suburb' || col === 'state' || col === 'updated' ? 1 : -1; }
+  page = 1;
+  render();
+}
+
+function filtered() {
+  const state = $('fState').value;
+  const search = $('fSearch').value.toLowerCase();
+  const minY = +$('fYield').value || 0;
+  const maxV = +$('fVac').value || 0;
+  return DATA.filter(r =>
+    (!state || r.state === state) &&
+    (!search || r.suburb.toLowerCase().includes(search)) &&
+    (!minY || (r.yield_u != null && r.yield_u >= minY) || (r.yield_h != null && r.yield_h >= minY)) &&
+    (!maxV || (r.vacancy != null && r.vacancy <= maxV))
+  );
+}
+
+function render() {
+  let rows = filtered();
+  rows.sort((a, b) => {
+    let av = a[sortCol], bv = b[sortCol];
+    if (av == null) av = sortDir > 0 ? Infinity : -Infinity;
+    if (bv == null) bv = sortDir > 0 ? Infinity : -Infinity;
+    return av < bv ? -sortDir : av > bv ? sortDir : 0;
+  });
+
+  const total = rows.length;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  page = Math.min(page, pages);
+  const slice = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  $('count').textContent = total + ' suburbs';
+  $('pgInfo').textContent = 'Page ' + page + ' of ' + pages;
+  $('btnPrev').disabled = page <= 1;
+  $('btnNext').disabled = page >= pages;
+
+  $('tbody').innerHTML = slice.map(r =>
+    '<tr>' +
+    '<td class="clickable" onclick="pickSuburb(\'' + r.suburb.replace(/'/g, "\\'") + '|' + r.state + '|' + r.postcode + '\',\'' + r.suburb.replace(/'/g, "\\'") + ' ' + r.state + ' ' + r.postcode + '\')">' + r.suburb + '</td>' +
+    '<td>' + r.state + '</td>' +
+    '<td style="color:var(--text2);font-size:12px">' + (r.updated || D) + '</td>' +
+    '<td class="' + vC(r.vacancy) + '">' + sP(r.vacancy) + '</td>' +
+    '<td>' + s$(r.ask_h) + '</td>' +
+    '<td>' + s$(r.ask_u) + '</td>' +
+    '<td>' + sR(r.rent_h) + '</td>' +
+    '<td>' + sR(r.rent_u) + '</td>' +
+    '<td class="' + yC(r.yield_h) + '">' + sY(r.yield_h) + '</td>' +
+    '<td class="' + yC(r.yield_u) + '">' + sY(r.yield_u) + '</td>' +
+    '<td class="' + gC(r.ph3m) + '">' + sP(r.ph3m) + '</td>' +
+    '<td class="' + gC(r.pu3m) + '">' + sP(r.pu3m) + '</td>' +
+    '<td class="' + gC(r.ph1y) + '">' + sP(r.ph1y) + '</td>' +
+    '<td class="' + gC(r.ph3y) + '">' + sP(r.ph3y) + '</td>' +
+    '<td class="' + gC(r.pu1y) + '">' + sP(r.pu1y) + '</td>' +
+    '<td class="' + gC(r.pu3y) + '">' + sP(r.pu3y) + '</td>' +
+    '<td class="' + gC(r.rh1y) + '">' + sP(r.rh1y) + '</td>' +
+    '<td class="' + gC(r.ru1y) + '">' + sP(r.ru1y) + '</td>' +
+    '<td>' + sP(r.renter_pct) + '</td>' +
+    '<td>' + (r.auc_n || D) + '</td>' +
+    '<td>' + s$(r.auc_med) + '</td>' +
+    '<td class="' + gC(r.auc_cr != null ? r.auc_cr - 0.6 : 0) + '">' + (r.auc_cr != null ? (r.auc_cr * 100).toFixed(1) + '%' : D) + '</td>' +
+    '</tr>'
+  ).join('');
+}
+
+// --- KPIs ---
+function buildKPIs() {
+  const vacs = DATA.map(r => r.vacancy).filter(v => v != null);
+  const yh = DATA.map(r => r.yield_h).filter(v => v != null);
+  const yu = DATA.map(r => r.yield_u).filter(v => v != null);
+  const kpis = [
+    { label: 'Suburbs', val: DATA.length.toLocaleString(), sub: 'with SQM data' },
+    { label: 'Median Vacancy', val: median(vacs).toFixed(1) + '%', sub: vacs.length + ' suburbs' },
+    { label: 'Median Yield (H)', val: median(yh).toFixed(2) + '%', sub: 'gross, house' },
+    { label: 'Median Yield (U)', val: median(yu).toFixed(2) + '%', sub: 'gross, unit' },
+  ];
+  $('kpiRow').innerHTML = kpis.map(k =>
+    '<div class="kpi-card"><div class="k-label">' + k.label + '</div><div class="k-val">' + k.val + '</div><div class="k-sub">' + k.sub + '</div></div>'
+  ).join('');
+}
+
+// --- Load screener data ---
+fetch('data/screener.json')
+  .then(r => r.json())
+  .then(j => {
+    DATA = j.data;
+    $('dataSub').textContent = DATA.length + ' suburbs — updated ' + j.updated;
+    const states = [...new Set(DATA.map(r => r.state))].sort();
+    $('fState').innerHTML += states.map(s => '<option value="' + s + '">' + s + '</option>').join('');
+    buildTrendIndex();
+    buildKPIs();
+    render();
+  })
+  .catch(e => { $('dataSub').textContent = 'Failed to load data: ' + e.message; });
+</script>
+
+<script type="module">
+// --- DuckDB-WASM for trend explorer ---
+let db = null, conn = null, dbReady = false, dbLoading = false;
+
+async function initDuckDB() {
+  if (dbReady) return;
+  if (dbLoading) {
+    while (!dbReady) await new Promise(r => setTimeout(r, 100));
+    return;
+  }
+  dbLoading = true;
+  document.getElementById('trendStatus').textContent = 'Initialising trend engine…';
+
+  const duckdb = await import('https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@latest/+esm');
+  const bundles = duckdb.getJsDelivrBundles();
+  const bundle = await duckdb.selectBundle(bundles);
+
+  const worker_url = URL.createObjectURL(
+    new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' })
+  );
+  const worker = new Worker(worker_url);
+  const logger = new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING);
+  db = new duckdb.AsyncDuckDB(logger, worker);
+  await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+  URL.revokeObjectURL(worker_url);
+
+  conn = await db.connect();
+
+  const base = window.location.href;
+  for (const f of ['series.parquet', 'comps.parquet', 'auctions.parquet']) {
+    await db.registerFileURL(f, new URL('data/' + f, base).href, duckdb.DuckDBDataProtocol.HTTP, false);
+  }
+
+  dbReady = true;
+  dbLoading = false;
+  document.getElementById('trendStatus').textContent = '';
+}
+
+async function queryTrend(suburb, state, postcode, metric) {
+  await initDuckDB();
+
+  const isYield = metric === 'gross_yield_house' || metric === 'gross_yield_unit';
+
+  let sql;
+  if (isYield) {
+    const rentMetric = metric === 'gross_yield_house' ? 'weekly_rent_house' : 'weekly_rent_unit';
+    const priceMetric = metric === 'gross_yield_house' ? 'asking_price_house' : 'asking_price_unit';
+    sql = `
+      SELECT CAST(r.date AS VARCHAR) as date, ROUND(r.value * 52 / NULLIF(p.value, 0) * 100, 2) as value
+      FROM read_parquet('series.parquet') r
+      JOIN read_parquet('series.parquet') p
+        ON r.suburb = p.suburb AND r.state = p.state AND r.postcode = p.postcode AND r.date = p.date
+      WHERE r.suburb = '${esc(suburb)}' AND r.state = '${esc(state)}' AND r.postcode = '${esc(postcode)}'
+        AND r.metric = '${rentMetric}' AND p.metric = '${priceMetric}'
+      ORDER BY r.date
+    `;
+  } else {
+    sql = `
+      SELECT CAST(date AS VARCHAR) as date, value
+      FROM read_parquet('series.parquet')
+      WHERE suburb = '${esc(suburb)}' AND state = '${esc(state)}' AND postcode = '${esc(postcode)}'
+        AND metric = '${esc(metric)}'
+      ORDER BY date
+    `;
+  }
+
+  const result = await conn.query(sql);
+  return result.toArray().map(row => ({
+    date: String(row.date).slice(0, 7),
+    value: Number(row.value)
+  }));
+}
+
+async function queryComps(suburb, state, postcode) {
+  await initDuckDB();
+  const sql = `
+    SELECT address, sale_price, sale_date, property_type,
+           bedrooms, bathrooms, parking, land_size, floor_size,
+           year_built, lat, lng, last_updated
+    FROM read_parquet('comps.parquet')
+    WHERE suburb = '${esc(suburb)}' AND state = '${esc(state)}' AND postcode = '${esc(postcode)}'
+    ORDER BY sale_date DESC
+  `;
+  const r = await conn.query(sql);
+  return r.toArray().map(row => {
+    const o = {};
+    for (const k of ['address','sale_price','sale_date','property_type','bedrooms','bathrooms','parking','land_size','floor_size','year_built','lat','lng','last_updated']) {
+      const v = row[k];
+      o[k] = (v === null || v === undefined) ? null : (typeof v === 'bigint' ? Number(v) : v);
+    }
+    return o;
+  });
+}
+
+async function queryAuctions(suburb, state, postcode) {
+  await initDuckDB();
+  const sql = `
+    SELECT address, property_type, bedrooms, bathrooms, price,
+           result, auction_date, agency, domain_url
+    FROM read_parquet('auctions.parquet')
+    WHERE suburb = '${esc(suburb)}' AND state = '${esc(state)}' AND postcode = '${esc(postcode)}'
+    ORDER BY auction_date DESC
+  `;
+  const r = await conn.query(sql);
+  return r.toArray().map(row => {
+    const o = {};
+    for (const k of ['address','property_type','bedrooms','bathrooms','price','result','auction_date','agency','domain_url']) {
+      const v = row[k];
+      o[k] = (v === null || v === undefined) ? null : (typeof v === 'bigint' ? Number(v) : v);
+    }
+    return o;
+  });
+}
+
+function esc(s) { return s.replace(/'/g, "''"); }
+
+window.queryTrend = queryTrend;
+window.queryComps = queryComps;
+window.queryAuctions = queryAuctions;
+window.initDuckDB = initDuckDB;
+</script>
+
+<script>
+// --- Trend explorer UI ---
+let trendSelected = '', trendIndex = [];
+let trendChart = null;
+
+function buildTrendIndex() {
+  trendIndex = DATA
+    .filter(s => s.vacancy != null)
+    .sort((a, b) => a.suburb.localeCompare(b.suburb))
+    .map(s => ({ key: s.suburb + '|' + s.state + '|' + s.postcode, label: s.suburb + ' ' + s.state + ' ' + s.postcode }));
+}
+
+const trendInput = $('trendInput');
+const trendDrop = $('trendDrop');
+let hlIdx = -1;
+
+trendInput.addEventListener('input', filterDropdown);
+trendInput.addEventListener('focus', filterDropdown);
+trendInput.addEventListener('keydown', e => {
+  const items = trendDrop.children;
+  if (e.key === 'ArrowDown') { hlIdx = Math.min(hlIdx + 1, items.length - 1); highlightItem(items); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { hlIdx = Math.max(hlIdx - 1, 0); highlightItem(items); e.preventDefault(); }
+  else if (e.key === 'Enter' && hlIdx >= 0 && items[hlIdx]) { items[hlIdx].dispatchEvent(new Event('mousedown')); e.preventDefault(); }
+  else if (e.key === 'Escape') { trendDrop.style.display = 'none'; }
+});
+document.addEventListener('click', e => { if (!e.target.closest('#trendInput,#trendDrop')) trendDrop.style.display = 'none'; });
+
+function filterDropdown() {
+  const q = trendInput.value.toLowerCase();
+  const matches = q ? trendIndex.filter(s => s.label.toLowerCase().includes(q)).slice(0, 15) : trendIndex.slice(0, 15);
+  hlIdx = -1;
+  trendDrop.style.display = matches.length ? 'block' : 'none';
+  trendDrop.innerHTML = matches.map(m =>
+    '<div class="dropdown-item" onmousedown="pickSuburb(\'' + m.key.replace(/'/g, "\\'") + '\',\'' + m.label.replace(/'/g, "\\'") + '\')">' + m.label + '</div>'
+  ).join('');
+}
+
+function highlightItem(items) {
+  [...items].forEach((el, i) => el.classList.toggle('hl', i === hlIdx));
+  if (items[hlIdx]) items[hlIdx].scrollIntoView({ block: 'nearest' });
+}
+
+function pickSuburb(key, label) {
+  trendSelected = key;
+  trendInput.value = label;
+  trendDrop.style.display = 'none';
+  renderTrend();
+  loadComps(key);
+  loadAuctions(key);
+}
+window.pickSuburb = pickSuburb;
+
+function metricMeta(metric) {
+  const isYield = metric.startsWith('gross_yield');
+  const isPrice = metric.startsWith('asking_price');
+  const isRent = metric.startsWith('weekly_rent');
+  return {
+    prefix: isPrice || isRent ? '$' : '',
+    suffix: isYield || metric === 'vacancy_rate' ? '%' : isRent ? '/wk' : '',
+    label: metric.replace(/_/g, ' ')
+  };
+}
+
+async function renderTrend() {
+  if (!trendSelected) return;
+  const [suburb, state, postcode] = trendSelected.split('|');
+  const metricL = $('metricL').value;
+  const metricR = $('metricR').value;
+
+  try {
+    const [ptsL, ptsR] = await Promise.all([
+      window.queryTrend(suburb, state, postcode, metricL),
+      window.queryTrend(suburb, state, postcode, metricR),
+    ]);
+
+    if (trendChart) trendChart.destroy();
+
+    const mL = metricMeta(metricL);
+    const mR = metricMeta(metricR);
+    const labels = ptsL.length >= ptsR.length ? ptsL.map(p => p.date) : ptsR.map(p => p.date);
+
+    trendChart = new Chart($('chartTrend').getContext('2d'), {
+      data: {
+        labels,
+        datasets: [
+          {
+            type: 'bar',
+            label: mL.label,
+            data: ptsL.map(p => p.value),
+            backgroundColor: 'rgba(10,132,255,0.35)',
+            borderColor: '#0a84ff',
+            borderWidth: 1,
+            borderRadius: 2,
+            yAxisID: 'yL',
+            order: 2,
+          },
+          {
+            type: 'line',
+            label: mR.label,
+            data: ptsR.map(p => p.value),
+            borderColor: '#30d158',
+            backgroundColor: 'rgba(48,209,88,0.08)',
+            fill: false,
+            tension: 0.3,
+            pointRadius: 2,
+            borderWidth: 2,
+            yAxisID: 'yR',
+            order: 1,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { labels: { color: '#86868b', usePointStyle: true, boxWidth: 16 } },
+          tooltip: { callbacks: {
+            label: ctx => {
+              const m = ctx.datasetIndex === 0 ? mL : mR;
+              return ctx.dataset.label + ': ' + m.prefix + Math.round(ctx.parsed.y).toLocaleString() + m.suffix;
+            }
+          }}
+        },
+        scales: {
+          x: { ticks: { color: '#86868b', maxTicksLimit: 10 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          yL: {
+            position: 'left',
+            ticks: { color: '#0a84ff', callback: v => mL.prefix + Math.round(v).toLocaleString() + mL.suffix },
+            grid: { color: 'rgba(255,255,255,0.05)' },
+          },
+          yR: {
+            position: 'right',
+            ticks: { color: '#30d158', callback: v => mR.prefix + Math.round(v).toLocaleString() + mR.suffix },
+            grid: { drawOnChartArea: false },
+          }
+        }
+      }
+    });
+    $('trendStatus').textContent = '';
+  } catch (e) {
+    $('trendStatus').textContent = 'Error: ' + e.message;
+  }
+}
+window.renderTrend = renderTrend;
+
+// --- Comps ---
+let COMPS = [], compSortCol = 'sale_date', compSortDir = -1, compPage = 1;
+let chartComps = null;
+const COMP_PAGE = 25;
+
+async function loadComps(key) {
+  const [suburb, state, postcode] = key.split('|');
+  try {
+    COMPS = await window.queryComps(suburb, state, postcode);
+    if (!COMPS.length) throw new Error('none');
+    const updated = COMPS[0].last_updated || '';
+    $('compsSection').style.display = '';
+    $('compsTitle').textContent = suburb + ' ' + state + ' ' + postcode;
+    $('compsSub').textContent = COMPS.length + ' sales — updated ' + updated;
+    $('compType').value = '';
+    $('compBeds').value = '';
+    compPage = 1;
+    compSortCol = 'sale_date';
+    compSortDir = -1;
+    renderComps();
+  } catch {
+    $('compsSection').style.display = 'none';
+    COMPS = [];
+  }
+}
+window.loadComps = loadComps;
+
+function filteredComps() {
+  const type = $('compType').value;
+  const beds = $('compBeds').value;
+  return COMPS.filter(c =>
+    (!type || c.property_type === type) &&
+    (!beds || (beds === '4' ? (c.bedrooms >= 4) : c.bedrooms == beds))
+  );
+}
+
+function compSort(col) {
+  if (compSortCol === col) compSortDir *= -1;
+  else { compSortCol = col; compSortDir = col === 'address' || col === 'property_type' ? 1 : -1; }
+  compPage = 1;
+  renderComps();
+}
+window.compSort = compSort;
+
+function renderComps() {
+  let rows = filteredComps();
+  rows.sort((a, b) => {
+    let av = a[compSortCol], bv = b[compSortCol];
+    if (av == null) av = compSortDir > 0 ? Infinity : -Infinity;
+    if (bv == null) bv = compSortDir > 0 ? Infinity : -Infinity;
+    if (typeof av === 'string') return av.localeCompare(bv) * compSortDir;
+    return av < bv ? -compSortDir : av > bv ? compSortDir : 0;
+  });
+
+  const total = rows.length;
+  const pages = Math.max(1, Math.ceil(total / COMP_PAGE));
+  compPage = Math.min(compPage, pages);
+  const slice = rows.slice((compPage - 1) * COMP_PAGE, compPage * COMP_PAGE);
+
+  $('compsCount').textContent = total + ' sales';
+  $('compPgInfo').textContent = 'Page ' + compPage + ' of ' + pages;
+  $('compPrev').disabled = compPage <= 1;
+  $('compNext').disabled = compPage >= pages;
+
+  const shortAddr = a => a.replace(/,\s*\w+,\s*\w+\s+\d+$/, '');
+
+  function propertyUrl(c) {
+    return 'https://www.google.com/search?q=' + encodeURIComponent(c.address + ' site:property.com.au');
+  }
+
+  $('compsTbody').innerHTML = slice.map(c =>
+    '<tr>' +
+    '<td><a href="' + propertyUrl(c) + '" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">' + shortAddr(c.address) + '</a></td>' +
+    '<td>' + s$(c.sale_price) + '</td>' +
+    '<td>' + (c.sale_date || D) + '</td>' +
+    '<td>' + (c.property_type || D) + '</td>' +
+    '<td>' + (c.bedrooms ?? D) + '</td>' +
+    '<td>' + (c.bathrooms ?? D) + '</td>' +
+    '<td>' + (c.parking ?? D) + '</td>' +
+    '<td>' + (c.land_size ? c.land_size.toLocaleString() : D) + '</td>' +
+    '<td>' + (c.year_built || D) + '</td>' +
+    '</tr>'
+  ).join('');
+
+  renderCompsChart(rows);
+}
+window.renderComps = renderComps;
+
+function renderCompsChart(rows) {
+  if (chartComps) chartComps.destroy();
+  const pts = rows.filter(c => c.sale_price && c.sale_date)
+    .map(c => ({ x: c.sale_date, y: c.sale_price, type: c.property_type }))
+    .sort((a, b) => a.x.localeCompare(b.x));
+  if (!pts.length) return;
+
+  const colors = { House: '#0a84ff', Unit: '#30d158', Townhouse: '#ff9f0a', Land: '#bf5af2' };
+  const types = [...new Set(pts.map(p => p.type))];
+  const datasets = types.map(t => ({
+    label: t,
+    data: pts.filter(p => p.type === t).map(p => ({ x: p.x, y: p.y })),
+    backgroundColor: (colors[t] || '#86868b') + '99',
+    borderColor: colors[t] || '#86868b',
+    pointRadius: 4, pointHoverRadius: 6, showLine: false,
+  }));
+
+  chartComps = new Chart($('chartComps').getContext('2d'), {
+    type: 'scatter',
+    data: { datasets },
+    options: {
+      responsive: true,
+      interaction: { mode: 'nearest', intersect: true },
+      plugins: {
+        legend: { labels: { color: '#86868b', usePointStyle: true } },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': $' + ctx.parsed.y.toLocaleString() + ' (' + ctx.raw.x + ')' } }
+      },
+      scales: {
+        x: { type: 'category', labels: [...new Set(pts.map(p => p.x))], ticks: { color: '#86868b', maxTicksLimit: 8 }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        y: { ticks: { color: '#86868b', callback: v => '$' + (v/1000).toFixed(0) + 'k' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+      }
+    }
+  });
+}
+
+// --- Auction results (per suburb, loaded on click) ---
+let AUC_LIST = [], aucSortCol = 'auction_date', aucSortDir = -1, aucPage = 1;
+const AUC_PAGE = 25;
+const RESULT_LABELS = { AUSD: 'Sold', AUSP: 'Sold Prior', AUSA: 'Sold After', AUPP: 'Passed In (PI)', AUPI: 'Passed In', AUVB: 'Vendor Bid', AUWD: 'Withdrawn', AUPN: 'Postponed' };
+
+async function loadAuctions(key) {
+  const [suburb, state, postcode] = key.split('|');
+  if (state !== 'VIC' && state !== 'NSW') {
+    $('aucSection').style.display = 'none';
+    AUC_LIST = [];
+    return;
+  }
+  try {
+    AUC_LIST = await window.queryAuctions(suburb, state, postcode);
+    if (!AUC_LIST.length) throw new Error('none');
+    $('aucSection').style.display = '';
+    $('aucTitle').textContent = suburb + ' ' + state + ' ' + postcode + ' — Auction Results';
+    const sold = AUC_LIST.filter(a => ['AUSD','AUSP','AUSA','AUPP'].includes(a.result)).length;
+    $('aucSubDetail').textContent = AUC_LIST.length + ' auctions, ' + sold + ' sold';
+    $('aucType').value = '';
+    $('aucBeds').value = '';
+    aucPage = 1;
+    aucSortCol = 'auction_date';
+    aucSortDir = -1;
+    renderAuctions();
+  } catch {
+    $('aucSection').style.display = 'none';
+    AUC_LIST = [];
+  }
+}
+window.loadAuctions = loadAuctions;
+
+function aucSort(col) {
+  if (aucSortCol === col) aucSortDir *= -1;
+  else { aucSortCol = col; aucSortDir = col === 'address' ? 1 : -1; }
+  aucPage = 1;
+  renderAuctions();
+}
+window.aucSort = aucSort;
+
+function filteredAuctions() {
+  const type = $('aucType').value;
+  const beds = $('aucBeds').value;
+  return AUC_LIST.filter(a =>
+    (!type || a.property_type === type) &&
+    (!beds || (beds === '4' ? (a.bedrooms >= 4) : a.bedrooms == beds))
+  );
+}
+
+function renderAuctions() {
+  let rows = filteredAuctions();
+  rows.sort((a, b) => {
+    let av = a[aucSortCol], bv = b[aucSortCol];
+    if (av == null) av = aucSortDir > 0 ? Infinity : -Infinity;
+    if (bv == null) bv = aucSortDir > 0 ? Infinity : -Infinity;
+    if (typeof av === 'string') return av.localeCompare(bv) * aucSortDir;
+    return av < bv ? -aucSortDir : av > bv ? aucSortDir : 0;
+  });
+
+  const total = rows.length;
+  const pages = Math.max(1, Math.ceil(total / AUC_PAGE));
+  aucPage = Math.min(aucPage, pages);
+  const slice = rows.slice((aucPage - 1) * AUC_PAGE, aucPage * AUC_PAGE);
+
+  $('aucCount').textContent = total + ' auctions';
+  $('aucPgInfo').textContent = 'Page ' + aucPage + ' of ' + pages;
+  $('aucPrev').disabled = aucPage <= 1;
+  $('aucNext').disabled = aucPage >= pages;
+
+  function resultTag(r) {
+    const isSold = ['AUSD','AUSP','AUSA','AUPP'].includes(r);
+    const isWd = r === 'AUWD';
+    const cls = isSold ? 'sold' : isWd ? 'withdrawn' : 'other';
+    return '<span class="result-tag ' + cls + '">' + (RESULT_LABELS[r] || r) + '</span>';
+  }
+
+  $('aucTbody').innerHTML = slice.map(a =>
+    '<tr>' +
+    '<td>' + (a.domain_url ? '<a href="' + a.domain_url + '" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">' + (a.address || D) + '</a>' : (a.address || D)) + '</td>' +
+    '<td>' + (a.price ? s$(a.price) : D) + '</td>' +
+    '<td>' + (a.auction_date || D) + '</td>' +
+    '<td>' + resultTag(a.result) + '</td>' +
+    '<td>' + (a.property_type || D) + '</td>' +
+    '<td>' + (a.bedrooms ?? D) + '</td>' +
+    '<td>' + (a.bathrooms ?? D) + '</td>' +
+    '</tr>'
+  ).join('');
+}
+window.renderAuctions = renderAuctions;
+</script>
+
+</body>
+</html>
